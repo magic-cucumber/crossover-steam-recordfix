@@ -13,6 +13,7 @@ int main(int argc, char **argv) {
     fprintf(stderr, "usage: recordfix_smoke.exe DLL_PATH\n");
     return 2;
   }
+  fprintf(stderr,"smoke: loading DLL\n");
   HMODULE plugin = LoadLibraryA(argv[1]);
   if (!plugin) {
     fprintf(stderr, "LoadLibrary: %lu\n", GetLastError());
@@ -20,12 +21,15 @@ int main(int argc, char **argv) {
   }
   DWORD(WINAPI * init)(void) =
       (void *)GetProcAddress(plugin, "RecordFixInitialize");
-  if (!init || init())
-    return 4;
+  DWORD status=init?init():ERROR_PROC_NOT_FOUND;
+  fprintf(stderr,"smoke: initialize returned %lu\n",status);
+  if(status)return 4;
   HMODULE dxgi = GetModuleHandleW(L"dxgi.dll");
   CreateFactory create = (void *)GetProcAddress(dxgi, "CreateDXGIFactory");
   IDXGIFactory *f = 0;
+  fprintf(stderr,"smoke: creating factory\n");
   HRESULT hr = create(&factory_iid, (void **)&f);
+  fprintf(stderr,"smoke: factory HRESULT %08lx\n",hr);
   if (FAILED(hr))
     return 5;
   void *entry = (void *)f->lpVtbl->CreateSwapChain;

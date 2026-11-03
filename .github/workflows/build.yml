@@ -11,6 +11,9 @@ jobs:
       - run: cmake -S . -B build -A x64
       - run: cmake --build build --config Release
       - run: build\Release\recordfix_smoke.exe "${{ github.workspace }}\build\Release\steam_recordfix.dll"
+      - name: Initialization diagnostics
+        if: failure()
+        run: Get-Content build/Release/*.log -ErrorAction SilentlyContinue
       - run: python tests/run_launcher_tests.py build/Release
       - uses: actions/upload-artifact@v4
         with:
