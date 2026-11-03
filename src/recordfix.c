@@ -19,7 +19,7 @@ static void enter(void) {
   }
 }
 static void leave(void) { _InterlockedExchange(&lock, 0); }
-static void log(const char *s) {
+static void rf_log(const char *s) {
   if (logfile)
     put(logfile, s);
 }
@@ -53,7 +53,7 @@ static HRESULT capture_resource(void *o, void *heap, unsigned flags, void *desc,
       (*(unsigned *)((char *)desc + 48) & 1)) {
     if (out)
       *out = 0;
-    log("NV12 render target unsupported; selecting Steam RGB capture "
+    rf_log("NV12 render target unsupported; selecting Steam RGB capture "
         "fallback\r\n");
     return 0x80070057;
   }
@@ -113,7 +113,7 @@ static HRESULT create(void *o, void *d, void *desc, void **out) {
   HRESULT h = ((F)r->original[10])(o, d, desc, out);
   if (h >= 0 && out && *out)
     wrap(*out, 2);
-  log("CreateSwapChain returned\r\n");
+  rf_log("CreateSwapChain returned\r\n");
   return h;
 }
 static HRESULT hwnd(void *o, void *d, void *w, void *desc, void *full,
@@ -124,7 +124,7 @@ static HRESULT hwnd(void *o, void *d, void *w, void *desc, void *full,
   HRESULT h = ((F)r->original[15])(o, d, w, desc, full, restrictedOutput, out);
   if (h >= 0 && out && *out)
     wrap(*out, 2);
-  log("CreateSwapChainForHwnd returned\r\n");
+  rf_log("CreateSwapChainForHwnd returned\r\n");
   return h;
 }
 static HRESULT core(void *o, void *d, void *w, void *desc,
@@ -201,7 +201,7 @@ static void wrap(void *o, unsigned kind) {
   }
   *(void ***)o = r->wrapped;
   leave();
-  log(kind == 1   ? "Wrapped factory\r\n"
+  rf_log(kind == 1   ? "Wrapped factory\r\n"
       : kind == 2 ? "Wrapped swapchain\r\n"
       : kind == 3 ? "Wrapped D3D12 device\r\n"
                   : "Wrapped D3D12 queue\r\n");
@@ -251,7 +251,7 @@ __declspec(dllexport) DWORD WINAPI RecordFixInitialize(void) {
     if (logfile == INVALID_HANDLE_VALUE)
       logfile = 0;
   }
-  log("recordfix MinHook initialization\r\n");
+  rf_log("recordfix MinHook initialization\r\n");
   HMODULE dxgi = GetModuleHandleW(L"dxgi.dll");
   if (!dxgi)
     dxgi = LoadLibraryW(L"dxgi.dll");
@@ -318,7 +318,7 @@ __declspec(dllexport) DWORD WINAPI RecordFixInitialize(void) {
   GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
                          GET_MODULE_HANDLE_EX_FLAG_PIN,
                      (LPCWSTR)RecordFixInitialize, &pinned);
-  log("MinHook DXGI export hooks enabled\r\n");
+  rf_log("MinHook DXGI export hooks enabled\r\n");
   initialization_result = 0;
   InterlockedExchange(&initialization, 2);
   return 0;
