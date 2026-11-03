@@ -1,0 +1,21 @@
+name: Windows MSVC build
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - run: cmake -S . -B build -A x64
+      - run: cmake --build build --config Release
+      - run: build\Release\recordfix_smoke.exe "${{ github.workspace }}\build\Release\steam_recordfix.dll"
+      - run: python tests/run_launcher_tests.py build/Release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: steam-recordfix-windows-x64
+          path: |
+            build/Release/steam_recordfix.dll
+            build/Release/recordfix_preload.exe
+            examples/*.yaml

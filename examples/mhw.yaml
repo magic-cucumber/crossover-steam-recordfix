@@ -1,0 +1,14 @@
+# Relative paths are resolved against this YAML file, not the shell's cwd.
+executable: 'C:\Program Files (x86)\Steam\steamapps\common\Monster Hunter World\MonsterHunterWorld.exe'
+working_directory: 'C:\Program Files (x86)\Steam\steamapps\common\Monster Hunter World'
+arguments: []
+preload:
+  # Needed when launching a Steam game outside Steam's normal Play command.
+  - path: '..\build\steam_recordfix.dll'
+    initialize: RecordFixInitialize
+  - path: 'C:\Program Files (x86)\Steam\GameOverlayRenderer64.dll'
+environment:
+  SteamAppId: '582010'
+  SteamGameId: '582010'
+  SteamOverlayGameId: '582010'
+injection_timeout_ms: 30000

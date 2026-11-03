@@ -1,0 +1,10 @@
+# Replace paths and app ID for your game. Only Windows x64 is supported.
+executable: 'C:\Games\Example\Game.exe'
+working_directory: 'C:\Games\Example'
+arguments:
+  - '-windowed'
+preload:
+  - path: '..\build\steam_recordfix.dll'
+    initialize: RecordFixInitialize
+environment: {}
+injection_timeout_ms: 30000

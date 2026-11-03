@@ -1,0 +1,14 @@
+/build*/
+/.zig-cache/
+/.cache/
+__pycache__/
+*.pyc
+*.log
+*.dll
+*.exe
+*.obj
+*.lib
+*.pdb
+*.ilk
+*.mp4
+.DS_Store
