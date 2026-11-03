@@ -10,6 +10,7 @@ struct Rec {
 static struct Rec records[128];
 static unsigned nr, nt;
 static HANDLE logfile;
+static BOOL wine_runtime;
 static void *factory_entries[2], *factory_originals[2];
 static long lock;
 long _InterlockedCompareExchange(long volatile *, long, long);
@@ -34,8 +35,8 @@ static void *thunk(void *p) {
      native CFG metadata. Adapt only methods outside Wine's managed mappings. */
   MEMORY_BASIC_INFORMATION info;
   if (VirtualQuery(p, &info, sizeof(info)) && info.State == MEM_COMMIT &&
-      (info.Protect & (PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE |
-                       PAGE_EXECUTE_WRITECOPY)))
+      (info.Protect & (PAGE_EXECUTE | PAGE_EXECUTE_READ |
+                       PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY)))
     return p;
   for (unsigned i = 0; i < nt; i++)
     if (targets[i] == p)
@@ -61,7 +62,7 @@ static HRESULT capture_resource(void *o, void *heap, unsigned flags, void *desc,
     if (out)
       *out = 0;
     rf_log("NV12 render target unsupported; selecting Steam RGB capture "
-        "fallback\r\n");
+           "fallback\r\n");
     return 0x80070057;
   }
   typedef HRESULT (*F)(void *, void *, unsigned, void *, unsigned, void *,
@@ -155,6 +156,8 @@ static HRESULT composition(void *o, void *d, void *desc, void *restrictedOutput,
   return h;
 }
 static void wrap(void *o, unsigned kind) {
+  if (!wine_runtime)
+    return;
   if (!o)
     return;
   enter();
@@ -209,9 +212,9 @@ static void wrap(void *o, unsigned kind) {
   *(void ***)o = r->wrapped;
   leave();
   rf_log(kind == 1   ? "Wrapped factory\r\n"
-      : kind == 2 ? "Wrapped swapchain\r\n"
-      : kind == 3 ? "Wrapped D3D12 device\r\n"
-                  : "Wrapped D3D12 queue\r\n");
+         : kind == 2 ? "Wrapped swapchain\r\n"
+         : kind == 3 ? "Wrapped D3D12 device\r\n"
+                     : "Wrapped D3D12 queue\r\n");
 }
 
 /* MinHook operates on PE exports, never on D3DMetal Mach-O instructions. */
@@ -258,6 +261,8 @@ __declspec(dllexport) DWORD WINAPI RecordFixInitialize(void) {
     if (logfile == INVALID_HANDLE_VALUE)
       logfile = 0;
   }
+  wine_runtime = GetProcAddress(GetModuleHandleW(L"ntdll.dll"),
+                                "wine_get_version") != NULL;
   rf_log("recordfix MinHook initialization\r\n");
   HMODULE dxgi = GetModuleHandleW(L"dxgi.dll");
   if (!dxgi)
@@ -281,41 +286,44 @@ __declspec(dllexport) DWORD WINAPI RecordFixInitialize(void) {
       goto failed;
     made++;
   }
-  /* Steam requires factory creation entries to belong to dxgi.dll. Reuse
-     its existing Windows PE entry points and detour them through MinHook;
-     preserve each per-object native method behind our adapter. */
-  struct GUID factory2_iid = {0x50c83a1c,
-                              0xe072,
-                              0x4c48,
-                              {0x87, 0xb0, 0x36, 0x30, 0xfa, 0x36, 0xa6, 0xd0}};
-  void *probe = NULL;
-  HRESULT probe_result = original_factory2(0, &factory2_iid, &probe);
-  if (probe_result < 0 || !probe) {
-    status = MH_ERROR_UNSUPPORTED_FUNCTION;
-    goto failed;
-  }
-  void **probe_vtable = *(void ***)probe;
-  factory_entries[0] = probe_vtable[10];
-  factory_entries[1] = probe_vtable[15];
-  typedef unsigned(WINAPI * ReleaseFn)(void *);
-  ((ReleaseFn)probe_vtable[2])(probe);
-  for (unsigned i = 0; i < 2; i++) {
-    HMODULE owner = NULL;
-    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
-                                GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                            (LPCWSTR)factory_entries[i], &owner) ||
-        owner != dxgi) {
+  if (wine_runtime) {
+    /* Steam requires factory creation entries to belong to dxgi.dll. Reuse
+       its existing Windows PE entry points and detour them through MinHook;
+       preserve each per-object native method behind our adapter. */
+    struct GUID factory2_iid = {
+        0x50c83a1c,
+        0xe072,
+        0x4c48,
+        {0x87, 0xb0, 0x36, 0x30, 0xfa, 0x36, 0xa6, 0xd0}};
+    void *probe = NULL;
+    HRESULT probe_result = original_factory2(0, &factory2_iid, &probe);
+    if (probe_result < 0 || !probe) {
       status = MH_ERROR_UNSUPPORTED_FUNCTION;
       goto failed;
     }
-    entries[3 + i] = factory_entries[i];
-    status = MH_CreateHook(entries[3 + i], i ? (void *)hwnd : (void *)create,
-                           &factory_originals[i]);
-    if (status != MH_OK)
-      goto failed;
-    made++;
+    void **probe_vtable = *(void ***)probe;
+    factory_entries[0] = probe_vtable[10];
+    factory_entries[1] = probe_vtable[15];
+    typedef unsigned(WINAPI * ReleaseFn)(void *);
+    ((ReleaseFn)probe_vtable[2])(probe);
+    for (unsigned i = 0; i < 2; i++) {
+      HMODULE owner = NULL;
+      if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                                  GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                              (LPCWSTR)factory_entries[i], &owner) ||
+          owner != dxgi) {
+        status = MH_ERROR_UNSUPPORTED_FUNCTION;
+        goto failed;
+      }
+      entries[3 + i] = factory_entries[i];
+      status = MH_CreateHook(entries[3 + i], i ? (void *)hwnd : (void *)create,
+                             &factory_originals[i]);
+      if (status != MH_OK)
+        goto failed;
+      made++;
+    }
   }
-  for (unsigned i = 0; i < 5; i++) {
+  for (unsigned i = 0; i < made; i++) {
     status = MH_EnableHook(entries[i]);
     if (status != MH_OK)
       goto failed;
