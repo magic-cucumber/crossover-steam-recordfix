@@ -9,6 +9,6 @@ for i in range(n):s += [f'.globl thunk_{i}','.p2align 5',f'thunk_{i}:','.rept 16
 s+=['.section .rdata,"dr"','.globl thunks','thunks:']+[f'.quad thunk_{i}' for i in range(n)]
 (out/'thunks.S').write_text('\n'.join(s)+'\n')
 s=['EXTERN targets:QWORD','PUBLIC thunks','.code']
-for i in range(n):s += ['ALIGN 32',f'thunk_{i} PROC','REPT 16','nop','ENDM',f'jmp QWORD PTR [targets+{i*8}]',f'thunk_{i} ENDP']
+for i in range(n):s += ['ALIGN 16',f'thunk_{i} PROC','REPT 16','nop','ENDM',f'jmp QWORD PTR [targets+{i*8}]',f'thunk_{i} ENDP']
 s+=['.const','ALIGN 8','thunks LABEL QWORD']+[f'DQ thunk_{i}' for i in range(n)]+['END']
 (out/'thunks.asm').write_text('\n'.join(s)+'\n')
