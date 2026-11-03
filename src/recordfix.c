@@ -31,13 +31,6 @@ static struct Rec *rec(void *o) {
   return 0;
 }
 static void *thunk(void *p) {
-  /* PE-backed Windows methods already have valid executable mappings and
-     native CFG metadata. Adapt only methods outside Wine's managed mappings. */
-  MEMORY_BASIC_INFORMATION info;
-  if (VirtualQuery(p, &info, sizeof(info)) && info.State == MEM_COMMIT &&
-      (info.Protect & (PAGE_EXECUTE | PAGE_EXECUTE_READ |
-                       PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY)))
-    return p;
   for (unsigned i = 0; i < nt; i++)
     if (targets[i] == p)
       return thunks[i];

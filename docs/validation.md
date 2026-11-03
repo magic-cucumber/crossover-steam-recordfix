@@ -20,6 +20,6 @@
 - 2026-11-04 的 MHW 实测：原厂系统 DXGI 哈希保持不变，未部署本项目的 nativePC 插件；仅通过 examples/mhw.yaml 启动，Steam 成功后台录制。
 - 最终捕获方法为 Game D3D12 RGB + libx264（4线程）；抽取48.01秒完整片段，H.264 960×600约60fps，无解码错误，画面确认为游戏标题页；AAC 音频峰值 -22.8dB，非静音。
 - 通用启动器测试覆盖：主函数前 MinHook 初始化、Unicode、空参数、引号、末尾反斜杠、工作目录、环境、相对路径、未知/重复字段、多文档/错误 YAML、初始化导出缺失时终止挂起子进程。
-- Windows MSVC 构建由仓库 CI 检查；交叉编译成功不代替 MSVC CI 结果。
+- 适配限定于 Wine 环境；原生 Windows 不修改 COM 虚表。Windows CI 验证 MSVC/MASM 构建、MinHook 导出初始化、YAML 配置和挂起子进程注入。D3DMetal 捕获路径由上述 CrossOver MHW 实测覆盖。
 
 所有结果都只覆盖列出的环境。日志、游戏文件、用户账号和原厂二进制不纳入开源仓库。
