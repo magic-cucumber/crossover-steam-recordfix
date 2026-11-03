@@ -10,7 +10,11 @@ jobs:
           python-version: '3.x'
       - run: cmake -S . -B build -A x64
       - run: cmake --build build --config Release
-      - run: build\Release\recordfix_smoke.exe "${{ github.workspace }}\build\Release\steam_recordfix.dll"
+      - name: Factory smoke
+        run: |
+          & build\Release\recordfix_smoke.exe "${{ github.workspace }}\build\Release\steam_recordfix.dll"
+          Write-Host "Native smoke exit code: $LASTEXITCODE"
+          exit $LASTEXITCODE
       - name: Initialization diagnostics
         if: failure()
         run: Get-Content build/Release/*.log -ErrorAction SilentlyContinue

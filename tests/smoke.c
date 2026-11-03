@@ -39,7 +39,8 @@ int main(int argc, char **argv) {
       !VirtualProtect(entry, 1, PAGE_EXECUTE_READWRITE, &old))
     return 6;
   VirtualProtect(entry, 1, old, &ignored);
-  printf("MinHook factory adapter: executable PE entry verified\n");
+  fprintf(stderr,"smoke: executable PE entry verified; calling Release\n");
   IDXGIFactory_Release(f);
+  fprintf(stderr,"smoke: Release completed\n");
   return 0;
 }
