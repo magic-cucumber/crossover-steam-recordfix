@@ -7,7 +7,7 @@ os.environ.setdefault('ZIG_LOCAL_CACHE_DIR',str(build/'zig-local-cache'))
 zig=shutil.which('zig')
 if not zig:raise SystemExit('zig not found')
 subprocess.run([sys.executable,str(root/'tools/generate_thunks.py'),str(build/'generated')],check=True)
-files=[root/'src/recordfix.c',build/'generated/thunks.S']+[root/'third_party/minhook/src'/f for f in ['buffer.c','hook.c','trampoline.c','hde/hde64.c']]
+files=[root/'src/recordfix.c',build/'generated/thunks.S',build/'generated/thunk_table.c']+[root/'third_party/minhook/src'/f for f in ['buffer.c','hook.c','trampoline.c','hde/hde64.c']]
 common=[zig,'cc','-target','x86_64-windows-gnu','-O2']
 subprocess.run(common+['-shared',*map(str,files),'-I'+str(root/'third_party/minhook/include'),'-o',str(build/'steam_recordfix.dll')],check=True)
 subprocess.run(common+[str(root/'tests/smoke.c'),'-o',str(build/'recordfix_smoke.exe')],check=True)
