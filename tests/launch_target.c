@@ -29,9 +29,10 @@ int wmain(int argc, wchar_t **argv) {
       HWND dialog = FindWindowW(L"#32770", L"Steam RecordFix - Launch failed");
       DWORD owner = 0;
       if (dialog) GetWindowThreadProcessId(dialog, &owner);
-      if (owner == child.dwProcessId) {
+      if (owner == child.dwProcessId && IsWindowVisible(dialog) &&
+          IsWindowEnabled(dialog)) {
         found = 1;
-        PostMessageW(dialog, WM_COMMAND, IDOK, 0);
+        PostMessageW(dialog, WM_CLOSE, 0, 0);
         break;
       }
       if (WaitForSingleObject(child.hProcess, 100) == WAIT_OBJECT_0) break;
