@@ -13,5 +13,5 @@ subprocess.run(common+['-shared',*map(str,files),'-I'+str(root/'third_party/minh
 subprocess.run(common+[str(root/'tests/smoke.c'),'-o',str(build/'recordfix_smoke.exe')],check=True)
 yaml=root/'third_party/libyaml'
 yaml_sources=[str(p) for p in sorted((yaml/'src').glob('*.c'))]
-subprocess.run(common+['-municode',str(root/'src/launcher.c'),str(root/'src/config.c'),*yaml_sources,'-I'+str(yaml/'include'),'-DYAML_DECLARE_STATIC','-DYAML_VERSION_STRING="0.2.5"','-DYAML_VERSION_MAJOR=0','-DYAML_VERSION_MINOR=2','-DYAML_VERSION_PATCH=5','-o',str(build/'recordfix_preload.exe')],check=True)
-subprocess.run(common+['-municode',str(root/'tests/launch_target.c'),'-o',str(build/'recordfix_launch_target.exe')],check=True)
+subprocess.run(common+['-municode','-Wl,--subsystem,windows','-lshell32','-luser32',str(root/'src/launcher.c'),str(root/'src/config.c'),*yaml_sources,'-I'+str(yaml/'include'),'-DYAML_DECLARE_STATIC','-DYAML_VERSION_STRING="0.2.5"','-DYAML_VERSION_MAJOR=0','-DYAML_VERSION_MINOR=2','-DYAML_VERSION_PATCH=5','-o',str(build/'recordfix_preload.exe')],check=True)
+subprocess.run(common+['-municode','-luser32',str(root/'tests/launch_target.c'),'-o',str(build/'recordfix_launch_target.exe')],check=True)

@@ -5,7 +5,10 @@
 #include <string.h>
 #include <wchar.h>
 
+static char config_error[1024];
+const char *last_config_error(void) { return config_error; }
 static int error(const char *s) {
+  snprintf(config_error, sizeof(config_error), "%s", s);
   fprintf(stderr, "Configuration: %s\n", s);
   return 0;
 }
@@ -129,8 +132,10 @@ static int read_config_mode(const wchar_t *path, struct launch_config *c,
   }
   yaml_parser_set_input_file(&parser, f);
   if (!yaml_parser_load(&parser, &doc)) {
-    fprintf(stderr, "YAML line %zu: %s\n", parser.problem_mark.line + 1,
-            parser.problem ? parser.problem : "parse error");
+    snprintf(config_error, sizeof(config_error), "YAML line %zu: %s",
+             parser.problem_mark.line + 1,
+             parser.problem ? parser.problem : "parse error");
+    fprintf(stderr, "%s\n", config_error);
     yaml_parser_delete(&parser);
     fclose(f);
     return 0;

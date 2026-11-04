@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 """Real Windows child-process tests; use --wine BIN --bottle NAME on macOS."""
 from pathlib import Path
-import argparse,json,os,subprocess,tempfile,shutil
+import argparse,json,os,subprocess,tempfile,shutil,struct
 p=argparse.ArgumentParser();p.add_argument('build',type=Path);p.add_argument('--wine');p.add_argument('--bottle');a=p.parse_args()
+os.environ['RECORDFIX_NO_ERROR_DIALOG']='1'
 build=a.build.resolve();launcher=build/'recordfix_preload.exe'
+image=launcher.read_bytes();pe=struct.unpack_from('<I',image,60)[0]
+assert struct.unpack_from('<H',image,pe+24+68)[0]==2, 'launcher must use Windows GUI subsystem'
+print('PASS: launcher uses GUI subsystem (no console allocation)')
 def win(path):return str(path) if os.name=='nt' else 'Z:'+str(path).replace('/','\\')
 def command(*args):return ([a.wine,'--bottle',a.bottle,'--no-update'] if a.wine else [])+[str(launcher),*map(str,args)]
 def scalar(s):return json.dumps(str(s),ensure_ascii=False)
@@ -50,3 +54,7 @@ with tempfile.TemporaryDirectory(prefix='preload failure ',dir=build) as tmp:
  r=subprocess.run(command(win(config)),timeout=90)
  assert r.returncode!=0 and not result.exists(),r.returncode
  print('PASS: failed initialization aborts the suspended child before main')
+
+probe=([a.wine,'--bottle',a.bottle,'--no-update'] if a.wine else [])+[str(build/'recordfix_launch_target.exe'),'--check-error-dialog',win(launcher)]
+subprocess.run(probe,check=True,timeout=60)
+print('PASS: fatal launch error shows MessageBox and exits after dismissal')

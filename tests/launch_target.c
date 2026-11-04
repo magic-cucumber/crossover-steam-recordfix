@@ -13,12 +13,48 @@ static void line(FILE *f, const wchar_t *s) {
   free(b);
 }
 int wmain(int argc, wchar_t **argv) {
+  if (argc == 3 && !wcscmp(argv[1], L"--check-error-dialog")) {
+    /* Exercise real modal UI, dismiss it, and verify the fatal exit code. */
+    SetEnvironmentVariableW(L"RECORDFIX_NO_ERROR_DIALOG", NULL);
+    wchar_t command[32768];
+    swprintf(command, 32768, L"\"%ls\"", argv[2]);
+    STARTUPINFOW startup = {0};
+    startup.cb = sizeof(startup);
+    PROCESS_INFORMATION child = {0};
+    if (!CreateProcessW(argv[2], command, NULL, NULL, FALSE, CREATE_NO_WINDOW,
+                        NULL, NULL, &startup, &child))
+      return 80;
+    int found = 0;
+    for (int i = 0; i < 300; i++) {
+      HWND dialog = FindWindowW(L"#32770", L"Steam RecordFix - Launch failed");
+      DWORD owner = 0;
+      if (dialog) GetWindowThreadProcessId(dialog, &owner);
+      if (owner == child.dwProcessId) {
+        found = 1;
+        PostMessageW(dialog, WM_COMMAND, IDOK, 0);
+        break;
+      }
+      if (WaitForSingleObject(child.hProcess, 100) == WAIT_OBJECT_0) break;
+    }
+    DWORD status = 0;
+    if (!found || WaitForSingleObject(child.hProcess, 10000) != WAIT_OBJECT_0) {
+      TerminateProcess(child.hProcess, 81);
+      WaitForSingleObject(child.hProcess, 10000);
+    } else {
+      GetExitCodeProcess(child.hProcess, &status);
+    }
+    CloseHandle(child.hThread);
+    CloseHandle(child.hProcess);
+    return found && status == 2 ? 0 : 81;
+  }
   if (argc == 2 && !wcscmp(argv[1], L"--probe-cwd")) {
     wchar_t cwd[32768];
     GetCurrentDirectoryW(32768, cwd);
     line(stdout, cwd);
     return 0;
   }
+  if (GetConsoleWindow())
+    return 77; /* launcher must not allocate a child console */
   HMODULE plugin = GetModuleHandleW(L"steam_recordfix.dll");
   if (!plugin)
     return 70;

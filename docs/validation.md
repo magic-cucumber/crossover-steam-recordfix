@@ -22,4 +22,11 @@
 - 通用启动器测试覆盖：主函数前 MinHook 初始化、Unicode、空参数、引号、末尾反斜杠、工作目录、环境、相对路径、未知/重复字段、多文档/错误 YAML、初始化导出缺失时终止挂起子进程。
 - 适配限定于 Wine 环境；原生 Windows 不修改 COM 虚表。Windows CI 验证 MSVC/MASM 构建、MinHook 导出初始化、YAML 配置和挂起子进程注入。D3DMetal 捕获路径由上述 CrossOver MHW 实测覆盖。
 
+## 无控制台启动器
+
+- Zig 构建的 PE 子系统验证为 Windows GUI（2），子进程测试确认 `GetConsoleWindow()` 为空。
+- CrossOver Steam-2 通过完整参数、注入、配置错误与失败清理回归。
+- 真实错误弹窗测试：启动缺少参数的 launcher，检测其 MessageBox，自动关闭并验证退出码为2。
+- 自动化失败用例设置 `RECORDFIX_NO_ERROR_DIALOG=1`，日常 Steam 启动默认启用致命错误弹窗。
+
 所有结果都只覆盖列出的环境。日志、游戏文件、用户账号和原厂二进制不纳入开源仓库。

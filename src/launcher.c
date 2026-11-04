@@ -2,9 +2,30 @@
 #include <windows.h>
 #include <stdio.h>
 #include <tlhelp32.h>
+#include <shellapi.h>
 #include <wchar.h>
 #include <stdlib.h>
 #include "config.h"
+
+/* GUI subsystem: no console allocation, including during Steam launches.
+   Automated callers may suppress modal UI while retaining stderr and exit codes. */
+static int fatal(int status, const wchar_t *detail, DWORD error) {
+  wchar_t message[4096], system[1024] = L"";
+  if (error)
+    FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                   NULL, error, 0, system, 1024, NULL);
+  if (error)
+    swprintf(message, 4096, L"%ls\n\nWin32 error %lu: %ls", detail, error, system);
+  else
+    swprintf(message, 4096, L"%ls", detail);
+  fwprintf(stderr, L"%ls\n", message);
+  wchar_t suppress[2];
+  if (!(GetEnvironmentVariableW(L"RECORDFIX_NO_ERROR_DIALOG", suppress, 2) == 1 &&
+        suppress[0] == L'1'))
+    MessageBoxW(NULL, message, L"Steam RecordFix - Launch failed",
+                MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
+  return status;
+}
 
 static HMODULE remote_module(DWORD pid, const wchar_t *name) {
   HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, pid);
@@ -57,8 +78,10 @@ static int inject(HANDLE process, DWORD pid, const struct preload_dll *d,
   const wchar_t *name = wcsrchr(d->path, L'\\');
   name = name ? name + 1 : d->path;
   HMODULE loaded = remote_module(pid, name);
-  if (!loaded)
+  if (!loaded) {
+    SetLastError(ERROR_MOD_NOT_FOUND);
     goto finished;
+  }
   if (d->initialize) {
     HMODULE local = LoadLibraryExW(d->path, NULL, DONT_RESOLVE_DLL_REFERENCES);
     if (!local)
@@ -113,7 +136,7 @@ static int steam_command(struct launch_config *config, int argc,
      NULL environment block also retains Steam's launch context and IDs. */
   return config->executable != NULL;
 }
-int wmain(int argc, wchar_t **argv) {
+static int launcher_main(int argc, wchar_t **argv) {
   int validate = argc == 3 && !wcscmp(argv[1], L"--validate");
   int steam = argc >= 2 && !wcscmp(argv[1], L"--steam");
   if ((steam && (argc < 5 || wcscmp(argv[3], L"--"))) ||
@@ -121,20 +144,23 @@ int wmain(int argc, wchar_t **argv) {
     fwprintf(stderr, L"Usage: recordfix_preload.exe [--validate] CONFIG.yaml\n"
                      L"       recordfix_preload.exe --steam CONFIG.yaml -- "
                      L"GAME.exe [args...]\n");
-    return 2;
+    return fatal(2, L"Invalid command line. Expected:\nrecordfix_preload.exe CONFIG.yaml\nor --steam CONFIG.yaml -- GAME.exe [args...]", 0);
   }
   struct launch_config config;
   if (!(steam ? read_steam_config(argv[2], &config)
-              : read_config(argv[validate ? 2 : 1], &config)))
-    return 3;
+              : read_config(argv[validate ? 2 : 1], &config))) {
+    wchar_t detail[2048] = L"Invalid configuration";
+    MultiByteToWideChar(CP_UTF8, 0, last_config_error(), -1, detail, 2048);
+    return fatal(3, detail, 0);
+  }
   if (steam && !steam_command(&config, argc - 4, argv + 4)) {
     free_config(&config);
-    return 3;
+    return fatal(3, L"Steam command must name an existing Windows x64 EXE and must not launch this launcher recursively.", 0);
   }
   wchar_t *command = build_command(&config);
   if (!command) {
     free_config(&config);
-    return 4;
+    return fatal(4, L"Cannot build game command line.", ERROR_NOT_ENOUGH_MEMORY);
   }
   if (validate) {
     wprintf(L"Configuration valid: %ls (%u preload DLLs)\n", config.executable,
@@ -146,44 +172,61 @@ int wmain(int argc, wchar_t **argv) {
   for (unsigned i = 0; i < config.environment_count; i++)
     if (!SetEnvironmentVariableW(config.environment[i].name,
                                  config.environment[i].value)) {
+      DWORD error = GetLastError();
       free(command);
       free_config(&config);
-      return 5;
+      return fatal(5, L"Cannot set game environment variable.", error);
     }
   STARTUPINFOW startup = {0};
   startup.cb = sizeof(startup);
   PROCESS_INFORMATION child = {0};
   if (!CreateProcessW(config.executable, command, NULL, NULL, FALSE,
-                      CREATE_SUSPENDED, NULL, config.directory, &startup,
+                      CREATE_SUSPENDED | CREATE_NO_WINDOW, NULL, config.directory, &startup,
                       &child)) {
-    fwprintf(stderr, L"CreateProcess failed: %lu\n", GetLastError());
+    DWORD error = GetLastError();
     free(command);
     free_config(&config);
-    return 6;
+    return fatal(6, L"Cannot start game process.", error);
   }
   free(command);
   int ok = 1;
+  DWORD failure = 0;
+  wchar_t detail[2048] = L"Cannot resume game process.";
   for (unsigned i = 0; i < config.dll_count; i++)
     if (!inject(child.hProcess, child.dwProcessId, &config.dlls[i],
                 config.timeout_ms)) {
-      fwprintf(stderr, L"Preload failed: %ls (Win32 error %lu)\n",
-               config.dlls[i].path, GetLastError());
+      failure = GetLastError();
+      swprintf(detail, 2048, L"Cannot preload or initialize DLL:\n%ls", config.dlls[i].path);
       ok = 0;
       break;
     }
-  if (ok)
+  if (ok) {
     ok = ResumeThread(child.hThread) != (DWORD)-1;
+    if (!ok) failure = GetLastError();
+  }
   CloseHandle(child.hThread);
   free_config(&config);
   if (!ok) {
     TerminateProcess(child.hProcess, ERROR_DLL_INIT_FAILED);
     WaitForSingleObject(child.hProcess, 30000);
     CloseHandle(child.hProcess);
-    return 7;
+    return fatal(7, detail, failure);
   }
   DWORD result = 0;
   WaitForSingleObject(child.hProcess, INFINITE);
   GetExitCodeProcess(child.hProcess, &result);
   CloseHandle(child.hProcess);
   return (int)result;
+}
+
+int WINAPI wWinMain(HINSTANCE instance, HINSTANCE previous,
+                    wchar_t *command, int show) {
+  (void)instance; (void)previous; (void)command; (void)show;
+  int argc;
+  wchar_t **argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+  if (!argv)
+    return fatal(2, L"Cannot parse command line.", GetLastError());
+  int status = launcher_main(argc, argv);
+  LocalFree(argv);
+  return status;
 }

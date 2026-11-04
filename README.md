@@ -32,7 +32,7 @@ flowchart LR
     F --> G[等待并返回游戏退出码]
 ```
 
-初始化不在 `DllMain` 的 loader lock 中执行。失败时终止本次刚创建的挂起进程，不让游戏在半初始化状态下运行。启动器不依赖 Stracker、QuestLoader 或游戏插件目录。
+初始化不在 `DllMain` 的 loader lock 中执行。失败时终止本次刚创建的挂起进程，不让游戏在半初始化状态下运行。启动器不依赖 Stracker、QuestLoader 或游戏插件目录。启动器使用 Windows GUI 子系统，不弹出控制台；配置、创建进程或注入失败时，先清理本次创建的子进程，再用 MessageBox 显示错误并退出。游戏正常退出时保留其退出码，不额外弹窗。自动化检查可设置 `RECORDFIX_NO_ERROR_DIALOG=1` 抑制错误框，仍保留 stderr 和退出码。
 
 ## 构建
 
