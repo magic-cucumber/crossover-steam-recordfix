@@ -23,5 +23,6 @@ struct launch_config {
   DWORD timeout_ms;
 };
 int read_config(const wchar_t *path, struct launch_config *config);
+int read_steam_config(const wchar_t *path, struct launch_config *config);
 void free_config(struct launch_config *config);
 wchar_t *build_command(const struct launch_config *config);

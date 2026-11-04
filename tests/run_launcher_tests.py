@@ -22,6 +22,19 @@ with tempfile.TemporaryDirectory(prefix='preload test ',dir=build) as tmp:
  write(relative);subprocess.run(command(win(config)),check=True,timeout=90)
  assert result.read_text(encoding='utf-8').splitlines()[2:]==args
  print('PASS: executable, working directory and DLL paths resolve relative to YAML')
+ # Emulate Steam's %command% expansion with inherited working directory and
+ # environment. YAML intentionally has no executable, args, cwd or Steam IDs.
+ steam_config=root/'steam.yaml'
+ steam_config.write_text('preload:\n  - path: '+scalar(win(build/'steam_recordfix.dll'))+'\n    initialize: RecordFixInitialize\n',encoding='utf-8')
+ env=dict(os.environ,RF_TEST_OUTPUT=win(result),RF_TEST_VALUE='inherited Steam context',SteamAppId='582010')
+ subprocess.run(command('--steam',win(steam_config),'--',win(child),*args),cwd=root,env=env,check=True,timeout=90)
+ lines=result.read_text(encoding='utf-8').splitlines();assert lines[0]=='inherited Steam context' and lines[2:]==args,lines
+ probe=([a.wine,'--bottle',a.bottle,'--no-update'] if a.wine else [])+[str(child),'--probe-cwd']
+ expected_cwd=subprocess.run(probe,cwd=root,capture_output=True,check=True,encoding='utf-8').stdout.strip()
+ assert lines[1].lower().rstrip('\\')==expected_cwd.lower().rstrip('\\'),lines[1]
+ for extra in [['--'],['--',win(launcher)],['--',win(root/'missing.exe')]]:
+  assert subprocess.run(command('--steam',win(steam_config),*extra),timeout=45).returncode!=0
+ print('PASS: Steam %command% mode retains args/cwd/environment and rejects missing/recursive targets')
  for text in [valid+'unknown_option: true\n', valid+'executable: bad.exe\n',valid+'---\nexecutable: bad.exe\n','executable: [broken\n']:
   result.unlink(missing_ok=True);write(text)
   r=subprocess.run(command(win(config)),timeout=45)

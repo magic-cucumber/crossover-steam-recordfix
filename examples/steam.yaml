@@ -1,0 +1,6 @@
+# Steam supplies the executable, arguments, working directory and App IDs.
+# Steam launch options: "...\recordfix_preload.exe" --steam "...\steam.yaml" -- %command%
+preload:
+  - path: '..\build\steam_recordfix.dll'
+    initialize: RecordFixInitialize
+injection_timeout_ms: 30000

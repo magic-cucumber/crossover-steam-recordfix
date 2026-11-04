@@ -104,7 +104,8 @@ static int dlls(yaml_document_t *d, yaml_node_t *n, const wchar_t *base,
   }
   return 1;
 }
-int read_config(const wchar_t *path, struct launch_config *c) {
+static int read_config_mode(const wchar_t *path, struct launch_config *c,
+                            int steam) {
   memset(c, 0, sizeof(*c));
   c->timeout_ms = 30000;
   wchar_t base[RF_PATH_CAP];
@@ -153,6 +154,11 @@ int read_config(const wchar_t *path, struct launch_config *c) {
         bit = 1u << i;
     if (!bit || (seen & bit)) {
       error("unknown or duplicate root field");
+      goto finished;
+    }
+    if (steam && (bit & 7)) {
+      error("Steam mode inherits executable, arguments and working directory; "
+            "remove these YAML fields");
       goto finished;
     }
     seen |= bit;
@@ -227,31 +233,34 @@ int read_config(const wchar_t *path, struct launch_config *c) {
       c->timeout_ms = (DWORD)n;
     }
   }
-  if (!c->executable) {
-    error("executable is required");
-    goto finished;
-  }
-  DWORD type;
-  if (!GetBinaryTypeW(c->executable, &type) || type != SCS_64BIT_BINARY) {
-    error("executable must be a Windows x64 program");
-    goto finished;
-  }
-  if (!c->directory) {
-    c->directory = _wcsdup(c->executable);
-    if (!c->directory)
+  if (!steam) {
+    if (!c->executable) {
+      error("executable is required");
       goto finished;
-    wchar_t *s = wcsrchr(c->directory, L'\\');
-    if (s) {
-      if (s == c->directory + 2 && c->directory[1] == L':')
-        s[1] = 0;
-      else
-        *s = 0;
     }
-  }
-  DWORD attrs = GetFileAttributesW(c->directory);
-  if (attrs == INVALID_FILE_ATTRIBUTES || !(attrs & FILE_ATTRIBUTE_DIRECTORY)) {
-    error("working directory does not exist");
-    goto finished;
+    DWORD type;
+    if (!GetBinaryTypeW(c->executable, &type) || type != SCS_64BIT_BINARY) {
+      error("executable must be a Windows x64 program");
+      goto finished;
+    }
+    if (!c->directory) {
+      c->directory = _wcsdup(c->executable);
+      if (!c->directory)
+        goto finished;
+      wchar_t *s = wcsrchr(c->directory, L'\\');
+      if (s) {
+        if (s == c->directory + 2 && c->directory[1] == L':')
+          s[1] = 0;
+        else
+          *s = 0;
+      }
+    }
+    DWORD attrs = GetFileAttributesW(c->directory);
+    if (attrs == INVALID_FILE_ATTRIBUTES ||
+        !(attrs & FILE_ATTRIBUTE_DIRECTORY)) {
+      error("working directory does not exist");
+      goto finished;
+    }
   }
   /* Reject a second YAML document rather than silently ignoring it. */
   yaml_document_t extra;
@@ -273,6 +282,12 @@ finished:
   if (!ok)
     free_config(c);
   return ok;
+}
+int read_config(const wchar_t *path, struct launch_config *c) {
+  return read_config_mode(path, c, 0);
+}
+int read_steam_config(const wchar_t *path, struct launch_config *c) {
+  return read_config_mode(path, c, 1);
 }
 void free_config(struct launch_config *c) {
   free(c->executable);

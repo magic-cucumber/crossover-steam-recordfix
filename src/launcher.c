@@ -88,16 +88,49 @@ finished:
     VirtualFreeEx(process, remote, 0, MEM_RELEASE);
   return ok;
 }
+static int steam_command(struct launch_config *config, int argc,
+                         wchar_t **argv) {
+  if (argc < 1 || argc - 1 > RF_MAX_ARGS)
+    return 0;
+  wchar_t path[RF_PATH_CAP];
+  DWORD n = GetFullPathNameW(argv[0], RF_PATH_CAP, path, NULL), type;
+  if (!n || n >= RF_PATH_CAP || !GetBinaryTypeW(path, &type) ||
+      type != SCS_64BIT_BINARY) {
+    fwprintf(stderr, L"Steam command must name an existing Windows x64 EXE\n");
+    return 0;
+  }
+  wchar_t self[RF_PATH_CAP];
+  if (!GetModuleFileNameW(NULL, self, RF_PATH_CAP) || !_wcsicmp(self, path))
+    return 0;
+  config->executable = _wcsdup(path);
+  for (int i = 1; i < argc; i++) {
+    wchar_t *arg = _wcsdup(argv[i]);
+    if (!arg)
+      return 0;
+    config->arguments[config->argument_count++] = arg;
+  }
+  /* NULL lpCurrentDirectory preserves the directory Steam chose. The default
+     NULL environment block also retains Steam's launch context and IDs. */
+  return config->executable != NULL;
+}
 int wmain(int argc, wchar_t **argv) {
   int validate = argc == 3 && !wcscmp(argv[1], L"--validate");
-  if ((!validate && argc != 2) || (argc == 3 && !validate)) {
-    fwprintf(stderr,
-             L"Usage: recordfix_preload.exe [--validate] CONFIG.yaml\n");
+  int steam = argc >= 2 && !wcscmp(argv[1], L"--steam");
+  if ((steam && (argc < 5 || wcscmp(argv[3], L"--"))) ||
+      (!steam && !validate && argc != 2)) {
+    fwprintf(stderr, L"Usage: recordfix_preload.exe [--validate] CONFIG.yaml\n"
+                     L"       recordfix_preload.exe --steam CONFIG.yaml -- "
+                     L"GAME.exe [args...]\n");
     return 2;
   }
   struct launch_config config;
-  if (!read_config(argv[validate ? 2 : 1], &config))
+  if (!(steam ? read_steam_config(argv[2], &config)
+              : read_config(argv[validate ? 2 : 1], &config)))
     return 3;
+  if (steam && !steam_command(&config, argc - 4, argv + 4)) {
+    free_config(&config);
+    return 3;
+  }
   wchar_t *command = build_command(&config);
   if (!command) {
     free_config(&config);

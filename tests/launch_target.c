@@ -13,6 +13,12 @@ static void line(FILE *f, const wchar_t *s) {
   free(b);
 }
 int wmain(int argc, wchar_t **argv) {
+  if (argc == 2 && !wcscmp(argv[1], L"--probe-cwd")) {
+    wchar_t cwd[32768];
+    GetCurrentDirectoryW(32768, cwd);
+    line(stdout, cwd);
+    return 0;
+  }
   HMODULE plugin = GetModuleHandleW(L"steam_recordfix.dll");
   if (!plugin)
     return 70;

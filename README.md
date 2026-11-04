@@ -98,6 +98,28 @@ injection_timeout_ms: 30000
 
 从 Steam 外启动时，Steam 客户端应先登录运行，配置正确 App ID，并按示例先初始化修复模块、再加载 Steam Overlay。更换游戏只需更换 EXE、参数、工作目录和 App ID；其他启动器、DRM、子进程链和反作弊可能需要额外适配。
 
+## 在 Steam 中点击“开始游戏”
+
+使用 `examples/steam.yaml`，这里只配置修复模块；游戏 EXE、原始参数、工作目录和 App ID 均由 Steam 提供，无需重复填写。
+
+在游戏“属性 → 通用 → 启动选项”中填写（请替换成实际 Windows 路径）：
+
+```text
+"C:\recordfix\build\recordfix_preload.exe" --steam "C:\recordfix\examples\steam.yaml" -- %command%
+```
+
+`%command%` 是 Steam 提供的游戏命令，必须放在 `--` 后面且不要将整个 `%command%` 额外包成一个字符串。若原来有游戏启动参数，放在 `%command%` 后面。
+
+Steam 模式不允许 YAML 再填写 `executable`、`arguments`、`working_directory`，避免配置覆盖 Steam 的真实启动命令；可选 `environment` 只在需要时显式覆盖继承的变量。通常无需手动预加载 Steam Overlay，Steam 会为游戏配置叠层。
+
+CrossOver 的 `Y:` 通常指向用户目录，例如本地项目的启动选项可使用：
+
+```text
+"Y:\IdeaProjects\crossover-steam-recordfix\build\recordfix_preload.exe" --steam "Y:\IdeaProjects\crossover-steam-recordfix\examples\steam.yaml" -- %command%
+```
+
+若容器盘符映射不同，请使用该容器实际可访问的路径。删除这条启动选项即可恢复普通 Steam 启动。
+
 ## 运行
 
 Windows / CrossOver 的“运行命令”：
